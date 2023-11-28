@@ -28,6 +28,10 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of processes in sleep state */
+static struct list sleep_list;
+
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -108,6 +112,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -208,6 +213,45 @@ thread_create (const char *name, int priority,
 	thread_unblock (t);
 
 	return tid;
+}
+
+/* if the current thread is not idle thread,
+	change the state of the caller thread to BLOCKED,
+	store the local tick to wake up,
+	update the global tick to wake up,
+	update the global tick if necessary,
+	and call schedule() */
+/* when you manipulate thread list, disable interrupt*/
+/* 비교 함수: 스레드의 wakeup_tick 값을 비교하여 정렬 순서를 결정합니다. */
+bool thread_wakeup_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux) {
+    const struct thread *thread_a = list_entry(a, struct thread, elem);
+    const struct thread *thread_b = list_entry(b, struct thread, elem);
+
+    return thread_a->wake_time < thread_b->wake_time;
+}
+
+void
+thread_sleep(int64_t ticks) {
+	thread_current() -> wake_time = ticks;
+	printf("%lld %lld , go sleep %d", thread_current() ->wake_time, ticks, thread_current() ->tid);
+	list_push_back(&sleep_list, &thread_current()->elem);
+	list_sort(&sleep_list,thread_wakeup_tick_less, NULL);
+	thread_block();
+}
+
+int64_t
+thread_wake(int64_t ticks){
+	for(struct list_elem *e = list_begin (&sleep_list); e != list_end (&sleep_list); e=e->next){
+		struct thread * sleep = list_entry (e, struct thread, elem);
+		printf("%lld %lld awake %d", sleep->wake_time, ticks, sleep->tid);
+
+		if(sleep->wake_time < ticks){
+			list_pop_front(&sleep_list);
+			thread_unblock(sleep);
+		}
+		else
+			return sleep->wake_time;
+	}
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
