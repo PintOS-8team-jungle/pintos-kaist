@@ -232,22 +232,35 @@ bool thread_wakeup_tick_less(const struct list_elem *a, const struct list_elem *
 
 void
 thread_sleep(int64_t ticks) {
-	thread_current() -> wake_time = ticks;
-	printf("%lld %lld , go sleep %d", thread_current() ->wake_time, ticks, thread_current() ->tid);
-	list_push_back(&sleep_list, &thread_current()->elem);
-	list_sort(&sleep_list,thread_wakeup_tick_less, NULL);
-	thread_block();
+	struct thread *curr=thread_current();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+	
+	if (curr!=idle_thread){
+		old_level = intr_disable ();
+		curr -> wake_time = ticks;
+		list_push_back(&sleep_list, &curr->elem);
+		list_sort(&sleep_list, thread_wakeup_tick_less, curr->wake_time);
+		thread_block();
+		// do_schedule (THREAD_BLOCKED);
+		intr_set_level (old_level);	
+	}
 }
 
 int64_t
 thread_wake(int64_t ticks){
-	for(struct list_elem *e = list_begin (&sleep_list); e != list_end (&sleep_list); e=e->next){
+	for(struct list_elem *e = list_begin (&sleep_list); e != list_end (&sleep_list); e=list_next(e)){
 		struct thread * sleep = list_entry (e, struct thread, elem);
-		printf("%lld %lld awake %d", sleep->wake_time, ticks, sleep->tid);
-
-		if(sleep->wake_time < ticks){
-			list_pop_front(&sleep_list);
+		printf("%lld waketime %lld ticks\n",sleep->wake_time, ticks);
+		if(sleep->wake_time <= ticks){
+			enum intr_level old_level;
+			old_level = intr_disable ();
+			e=list_remove(e);
+			e=list_prev(e);
 			thread_unblock(sleep);
+			// do_schedule (THREAD_READY);
+			intr_set_level (old_level);	
 		}
 		else
 			return sleep->wake_time;
