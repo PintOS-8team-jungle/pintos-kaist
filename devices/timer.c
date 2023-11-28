@@ -135,12 +135,11 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 	/* check sleep list and the global tick
 		find any threads to wake up,
-		movwe them to the ready list if necessary
-		update the global tic
+		move them to the ready list if necessary
+		update the global tick
 	*/
-	if (global_tick < ticks){
+	if (global_tick <= ticks)
 		global_tick = thread_wake(ticks);
-	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
