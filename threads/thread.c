@@ -212,10 +212,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	if (!list_empty (&ready_list)) {
-		if (thread_sort_option(list_front(&ready_list), &thread_current()->elem, (int *) 1))
-			thread_yield();
-	}
+    thread_preemption();
 
 	return tid;
 }
@@ -230,7 +227,7 @@ thread_create (const char *name, int priority,
 
 /* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정합니다. */
 bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
-    const struct thread *thread_a = list_entry(a, struct thread, elem);
+	const struct thread *thread_a = list_entry(a, struct thread, elem);
     const struct thread *thread_b = list_entry(b, struct thread, elem);
 
 	if (aux == 0)
@@ -273,6 +270,7 @@ thread_wake(int64_t ticks){
 		else
 			return sleep->wake_time;
 	}
+	return ticks;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -379,9 +377,13 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+    thread_preemption();
+}
 
+/* */
+void thread_preemption(void){
 	if (!list_empty (&ready_list)) {
-		if (thread_sort_option(list_front(&ready_list), &thread_current()->elem, (int *) 1))
+		if (list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
 			thread_yield();
 	}
 }
