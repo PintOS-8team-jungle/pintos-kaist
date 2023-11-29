@@ -223,19 +223,16 @@ thread_create (const char *name, int priority,
 	and call schedule() */
 /* when you manipulate thread list, disable interrupt*/
 /* 비교 함수: 스레드의 wakeup_tick 값을 비교하여 정렬 순서를 결정합니다. */
-bool thread_wakeup_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux) {
+bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
     const struct thread *thread_a = list_entry(a, struct thread, elem);
     const struct thread *thread_b = list_entry(b, struct thread, elem);
 
-    return thread_a->wake_time < thread_b->wake_time;
+	if (aux == 0)
+	    return thread_a->wake_time < thread_b->wake_time;
+	else if(aux == 1)
+		return thread_a->priority > thread_b->priority;
 }
 
-bool thread_priority_high(const struct list_elem *a, const struct list_elem *b, void *aux){
-	const struct thread *thread_a = list_entry(a, struct thread, elem);
-    const struct thread *thread_b = list_entry(b, struct thread, elem);
-
-    return thread_a->priority > thread_b->priority;
-}
 
 void
 thread_sleep(int64_t ticks) {
@@ -247,7 +244,7 @@ thread_sleep(int64_t ticks) {
 	if (curr!=idle_thread){
 		old_level = intr_disable ();
 		curr -> wake_time = ticks;
-		list_insert_ordered(&sleep_list, &curr->elem,thread_wakeup_tick_less, curr->wake_time);
+		list_insert_ordered(&sleep_list, &curr->elem,thread_sort_option,(int *) 0);
 		// list_push_back(&sleep_list, &curr->elem);
 		// list_sort(&sleep_list, thread_wakeup_tick_less, curr->wake_time);
 		thread_block();
@@ -302,7 +299,7 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_insert_ordered(&ready_list, &t->elem,thread_priority_high, t->priority);
+	list_insert_ordered(&ready_list, &t->elem,thread_sort_option, (int *) 1);
 	//list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
