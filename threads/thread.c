@@ -222,7 +222,8 @@ thread_create (const char *name, int priority,
 	update the global tick if necessary,
 	and call schedule() */
 /* when you manipulate thread list, disable interrupt*/
-/* 비교 함수: 스레드의 wakeup_tick 값을 비교하여 정렬 순서를 결정합니다. */
+
+/* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정합니다. */
 bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
     const struct thread *thread_a = list_entry(a, struct thread, elem);
     const struct thread *thread_b = list_entry(b, struct thread, elem);
@@ -363,7 +364,8 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem,thread_sort_option, (int *) 1);
+		//list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
