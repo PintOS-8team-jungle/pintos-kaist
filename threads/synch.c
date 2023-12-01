@@ -66,6 +66,7 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
+		/* priority에 따라 semapore의 waiters리스트에 내림차순으로 삽입한다 */
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_sort_option, (int *) 1);
 		//list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
@@ -114,7 +115,7 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	sema->value++;
-	thread_preemption();
+	thread_preemption(); // 준비리스트에 쓰레드가 들어갔으니 우선도를 체크한다
 	intr_set_level (old_level);
 }
 
@@ -254,9 +255,10 @@ cond_init (struct condition *cond) {
 	list_init (&cond->waiters);
 }
 
-/**/
+/* 비교함수: condition.waiters 리스트에서 semaphore_elem을 가져오고
+	각 semaphore_elem 안의 semaphore에서 waters의 첫 쓰레드의 prority를 비교한다 */
 bool
-comp_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
+compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
 	const struct semaphore_elem *sema_a = list_entry(a, struct semaphore_elem, elem);
     const struct semaphore_elem *sema_b = list_entry(b, struct semaphore_elem, elem);
 
@@ -298,7 +300,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	old_level = intr_disable ();
 	sema_init (&waiter.semaphore, 0);
-	list_insert_ordered(&cond->waiters, &waiter.elem, comp_priority, NULL);
+	/* semaphor의 첫 쓰레드의 우선도를 비교하여 semaphore_elem의 리스트에 내림차순으로 넣는다 */
+	list_insert_ordered(&cond->waiters, &waiter.elem, compare_priority, NULL);
 	//list_push_back (&cond->waiters, &waiter.elem);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
@@ -323,7 +326,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 
 	if (!list_empty (&cond->waiters)){
 	    old_level = intr_disable ();
-	    list_sort(&cond->waiters, comp_priority, NULL);
+	    list_sort(&cond->waiters, compare_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 		intr_set_level(old_level);

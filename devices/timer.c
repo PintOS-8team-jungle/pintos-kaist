@@ -19,6 +19,8 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
+
+/* sleep list에 존재하는 쓰레드의 wake time의 최소값 */
 static int64_t global_tick = INT64_MAX;
 
 /* Number of loops per timer tick.
@@ -98,6 +100,8 @@ timer_sleep (int64_t ticks) {
 	ASSERT (intr_get_level () == INTR_ON);
 
 	if (timer_elapsed (start) < ticks){
+		/* if global_tick is bigger than wake time
+		   change global_tick */
 		if(start + ticks < global_tick)
 			global_tick = start + ticks;
 		thread_sleep(start + ticks);
@@ -133,11 +137,9 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
-	/* check sleep list and the global tick
-		find any threads to wake up,
-		move them to the ready list if necessary
-		update the global tick
-	*/
+	/* global tick 을 확인하여 깨울 수 있는 쓰레드가 있는지 확인한다,
+	   깨어날 수 있는 쓰레드들을 ready list에 넣고
+	   global tick을 갱신한다*/
 	if (global_tick <= ticks)
 		global_tick = thread_wake(ticks);
 }

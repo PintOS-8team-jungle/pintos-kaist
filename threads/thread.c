@@ -212,7 +212,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-    thread_preemption();
+    thread_preemption(); //실행중인 리스트의 우선도를 확인한다
 
 	return tid;
 }
@@ -225,18 +225,23 @@ thread_create (const char *name, int priority,
 	and call schedule() */
 /* when you manipulate thread list, disable interrupt*/
 
-/* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정합니다. */
+/* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정한다. */
 bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	// 비교할 쓰레드를 가져온다
 	const struct thread *thread_a = list_entry(a, struct thread, elem);
     const struct thread *thread_b = list_entry(b, struct thread, elem);
 
-	if (aux == 0)
+	if (aux == (int *) 0) // wake time을 기준으로 한 오름차순
 	    return thread_a->wake_time < thread_b->wake_time;
-	else if(aux == 1)
+	else if(aux == (int *) 1) // priority를 기준으로 한 내림차순
 		return thread_a->priority > thread_b->priority;
+	return -1;
 }
 
-
+/* 쓰레드의 wake time에 입력된 시간을 저장하고
+   입력된 시간이 되거나 지나면 쓰레드가 깨어나게 한다
+   그 전까지 쓰레드는 block된 상태로 
+   sleep list에서 일어나는 것을 기다린다  */
 void
 thread_sleep(int64_t ticks) {
 	struct thread *curr=thread_current();
@@ -246,31 +251,33 @@ thread_sleep(int64_t ticks) {
 	
 	if (curr!=idle_thread){
 		old_level = intr_disable ();
+		/* thread를 wake time 기준으로 sleeplist에 넣고, block시킨다*/
 		curr -> wake_time = ticks;
 		list_insert_ordered(&sleep_list, &curr->elem,thread_sort_option,(int *) 0);
 		// list_push_back(&sleep_list, &curr->elem);
-		// list_sort(&sleep_list, thread_wakeup_tick_less, curr->wake_time);
 		thread_block();
 		intr_set_level (old_level);	
 	}
 }
 
+/* tick을 받아와 tick 보다 wake time이 낮은 쓰레드를 전부 깨우고
+   global tick을 갱신할 값을 반환한다 */
 int64_t
 thread_wake(int64_t ticks){
-	for(struct list_elem *e = list_begin (&sleep_list); e != list_end (&sleep_list); e=list_next(e)){
-		struct thread * sleep = list_entry (e, struct thread, elem);
+	struct list_elem *e = list_begin (&sleep_list);
+	struct thread * sleep;
+	while (e != &sleep_list.tail) // sleep list의 끝까지 탐색한다
+	{
+		sleep = list_entry (e, struct thread, elem);
 		if(sleep->wake_time <= ticks){
-			enum intr_level old_level;
-			old_level = intr_disable ();
-			e=list_remove(e);
-			e=list_prev(e);
+			e = list_remove(e);
 			thread_unblock(sleep);
-			intr_set_level (old_level);	
 		}
-		else
+		else // 중간에 wake time이 tick보다 크다면 global tick을 전달한다
 			return sleep->wake_time;
 	}
-	return ticks;
+	// sleep list에 남은 쓰레드가 없기에 global tick을 최대값으로 변환한다
+	return INT64_MAX;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -303,6 +310,7 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
+	/* priority 기준으로 ready list에 삽입한다*/
 	list_insert_ordered(&ready_list, &t->elem,thread_sort_option, (int *) 1);
 	//list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
@@ -377,13 +385,15 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-    thread_preemption();
+    thread_preemption(); //실행중인 리스트의 우선도를 확인한다
 }
 
-/* */
+/* 현재 진행중인 쓰레드와 ready list의 첫 쓰레드의 우선도를 비교하여
+   ready list의 첫 쓰레드의 우선도가 높다면 현재쓰레드는 양보를 하게 된다
+   = ready list의 첫 쓰레드를 실행하게 한다 */
 void thread_preemption(void){
 	if (!list_empty (&ready_list)) {
-		if (list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+		if (list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_get_priority())
 			thread_yield();
 	}
 }
