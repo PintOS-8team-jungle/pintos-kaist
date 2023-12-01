@@ -190,9 +190,22 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-
+	
+	if(lock->holder!= NULL){
+		struct thread * lock_holder = lock->holder;
+		
+		list_push_back(&lock_holder->donate_list, &thread_current()->d_elem);
+		
+		if(lock_holder->donated == 0){
+			lock_holder->donated = 1;
+			lock_holder->original_priority = lock_holder->priority;
+		}
+		
+		struct list_elem * donor_elem = list_max(&lock_holder->donate_list, donate_max_option, NULL);
+		lock_holder->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+	}
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	lock->holder = thread_current();
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -224,7 +237,20 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
+	
+	if(!list_empty(&thread_current()->donate_list)){
+		struct list_elem * donor_elem = list_max(&thread_current()->donate_list, donate_max_option, NULL);
+		list_remove(donor_elem);
+	
+		if(!list_empty(&thread_current()->donate_list))
+			list_entry(donor_elem, struct thread, d_elem)->donate_list = lock->semaphore.waiters;
+		
+		if(thread_current()->donated == 1){
+			thread_current()->donated = 0;
+			thread_set_priority(thread_current()->original_priority);
+		}
+	}
+	
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }

@@ -92,11 +92,16 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	
-	int donation;						/* if donated, save original priority */
+	bool donated;						/* check thread is donated */
+	int original_priority;				/* if donated, save original priority */
 	int64_t wake_time;					/* element require for sleep & wake*/
+
+	struct lock * wait_on_lock;
+	struct list donate_list;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct list_elem d_elem;   			/* List element for donate list */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -149,6 +154,7 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep(int64_t ticks);
 int64_t thread_wake(int64_t ticks);
 bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool donate_max_option(const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_preemption(void);
 
 #endif /* threads/thread.h */

@@ -225,7 +225,7 @@ thread_create (const char *name, int priority,
 	and call schedule() */
 /* when you manipulate thread list, disable interrupt*/
 
-/* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정한다. */
+/* 비교 함수: 스레드의 값을 비교하여 정렬 순서를 결정한다. aux를 통해 기준을 정한다*/
 bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
 	// 비교할 쓰레드를 가져온다
 	const struct thread *thread_a = list_entry(a, struct thread, elem);
@@ -236,6 +236,13 @@ bool thread_sort_option(const struct list_elem *a, const struct list_elem *b, vo
 	else if(aux == (int *) 1) // priority를 기준으로 한 내림차순
 		return thread_a->priority > thread_b->priority;
 	return -1;
+}
+
+bool donate_max_option(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	const struct thread *thread_a = list_entry(a, struct thread, d_elem);
+    const struct thread *thread_b = list_entry(b, struct thread, d_elem);
+
+	return thread_a->priority < thread_b->priority;
 }
 
 /* 쓰레드의 wake time에 입력된 시간을 저장하고
@@ -493,6 +500,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	
+	t->wait_on_lock = NULL;
+	t->donated = 0;
+	list_init (&t->donate_list);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
