@@ -187,22 +187,28 @@ lock_init (struct lock *lock) {
    we need to sleep. */
 void
 lock_acquire (struct lock *lock) {
+	// 지정된 lock이 존재하고, 문맥 전환이 일어나지 않는 상태고, 현재 쓰레드가 lock을 가지고 있지 않음.
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-	
-	if(lock->holder!= NULL){
+
+	if(lock->holder != NULL){		// 다른 어떤 쓰레드가 lock을 가지고 있는 상태
 		struct thread * lock_holder = lock->holder;
 		
-		list_push_back(&lock_holder->donate_list, &thread_current()->d_elem);
-		thread_current()->wait_on_lock = lock;
+		list_push_back(&lock_holder->donate_list, &thread_current()->d_elem);	// lock_holder를 donate_list에 넣어줌
+		thread_current()->wait_on_lock = lock; // 쓰레드가 기다리는 lock을 명시해준다
 		
+		// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져와줌
 		struct list_elem * donor_elem = list_max(&lock_holder->donate_list, donate_max_option, NULL);
+		// priority donation이 발생하는 부분
 		lock_holder->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
 	}
 
+	//현재 쓰레드가 락을 획득할 수 있을 때까지 현재 lock의 semaphore의 waiter에 들어가고 block됨 
 	sema_down (&lock->semaphore);
+	// 현재 쓰레드가 락을 획득하고 wait on lock을 갱신함
 	lock->holder = thread_current();
+	thread_current()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -232,29 +238,38 @@ lock_try_acquire (struct lock *lock) {
    handler. */
 void
 lock_release (struct lock *lock) {
+	// 락 자체가 존재하고, 현재 쓰레드는 lock을 가지고 있음.
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-	
+
+	// 현재 쓰레드의 donate_list가 비어있지 않음.
 	if(!list_empty(&thread_current()->donate_list)){
-		// 현재락과 같은것을 리스트로 만들고 다음으로 원하는애한테 던져줌 나머지는 그 다음얘한테 던져줌
+		// donate_list의 첫 번째 d_elem을 받아옴.
 		struct list_elem * donor_elem = list_begin(&thread_current()->donate_list);
 
+		// donor_elem이 현재 쓰레드의 donate_list의 tail이 될 때까지
 		while (donor_elem != &thread_current()->donate_list.tail)
 		{
+			// donor_elem을 가진 쓰레드가 해당 lock을 기다리고 있을 때 donate_list에서 제거
 			if(list_entry(donor_elem, struct thread, d_elem)->wait_on_lock == lock)
 				donor_elem = list_remove(donor_elem);
 			else
 				donor_elem = donor_elem->next;
 		}
 
-		if(!list_empty(&thread_current()->donate_list)){
+		// 현재 쓰레드의 donate_list가 비어있지 않음.
+		if(!list_empty(&thread_current()->donate_list)){ 
+			// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져옴
 			donor_elem = list_max(&thread_current()->donate_list, donate_max_option, NULL);
+			// 현재 쓰레드의 priority를 donor_elem을 가지고 있는 쓰레드의 priority값으로 갱신해줌
 			thread_current()->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
 		}
+		/* 현재쓰레드의 donate_list가 비어있다면 = 현재쓰레드가 보유중인 락을 요구하는 쓰레드 중
+		   현재쓰레드의 우선순위가 가장 높다면 현재쓰레드의 priority가 original_priority로 돌아옴*/
 		else
 			thread_current()->priority = thread_current()->original_priority;
 	}
-	
+	// holder의 lock 소유권을 해제하고 Sema_up을 해줌
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }

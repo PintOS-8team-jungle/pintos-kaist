@@ -504,7 +504,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 	
 	t->wait_on_lock = NULL;
-	t->donated = 0;
 	list_init (&t->donate_list);
 }
 
