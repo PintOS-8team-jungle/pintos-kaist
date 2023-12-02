@@ -392,6 +392,7 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	thread_current ()->original_priority = new_priority;
     thread_preemption(); //실행중인 리스트의 우선도를 확인한다
 }
 
@@ -499,6 +500,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->original_priority = priority;
 	t->magic = THREAD_MAGIC;
 	
 	t->wait_on_lock = NULL;
