@@ -66,9 +66,10 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		/* priority에 따라 semapore의 waiters리스트에 내림차순으로 삽입한다 */
-		list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_sort_option, (int *) 1);
-		//list_push_back (&sema->waiters, &thread_current ()->elem);
+		/* priority에 따라 semapore의 waiters리스트에 내림차순으로 삽입한다 
+		   - donate sema를 하기 위해서 sema를 sort하기에 insert_orderd를 할 필요가 없다 */
+		//list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_sort_option, (int *) 1);
+		list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
 	}
 	sema->value--;
@@ -111,9 +112,11 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+	if (!list_empty (&sema->waiters)){
+		// sema waiter에 있는 요소를 unblock하기 전에 우선도가 바뀌었을 수 있으므로 정렬해준다.
+		list_sort(&sema->waiters, thread_sort_option, (int *) 1);
+		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+	}
 	sema->value++;
 	thread_preemption(); // 준비리스트에 쓰레드가 들어갔으니 우선도를 체크한다
 	intr_set_level (old_level);
@@ -202,6 +205,20 @@ lock_acquire (struct lock *lock) {
 		struct list_elem * donor_elem = list_max(&lock_holder->donate_list, donate_max_option, NULL);
 		// priority donation이 발생하는 부분
 		lock_holder->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+
+		// donate_priority 선언하고, 이는 lock을 가지고 있는 쓰레드의 priority를 의미한다
+		int donated_priority = lock_holder->priority;
+		// lock을 가지고 있는 쓰레드가 또 다른 lock을 기다리고 있다면
+		while (lock_holder->wait_on_lock != NULL)
+		{
+			// lock을 가지고 있는 쓰레드가 기다리는 lock의 소유자로 lock_holder를 갱신한다
+			lock_holder = lock_holder->wait_on_lock->holder;
+			// lock을 가지고 있는 쓰레드의 priority가 donated_priority보다 작다면, priority 갱신
+			if(lock_holder->priority < donated_priority)
+				lock_holder->priority = donated_priority;
+			else
+				break;
+		}
 	}
 
 	//현재 쓰레드가 락을 획득할 수 있을 때까지 현재 lock의 semaphore의 waiter에 들어가고 block됨 

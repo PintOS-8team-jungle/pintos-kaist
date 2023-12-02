@@ -391,8 +391,17 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	thread_current ()->original_priority = new_priority;
+	struct thread * current = thread_current ();
+	current->original_priority = new_priority;
+
+	// priority donation 재실행
+	if(!list_empty(&current->donate_list)){
+		struct list_elem * donor_elem = list_max(&current->donate_list, donate_max_option, NULL);
+		current->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+	}
+	else // 아닌경우 입력된 값으로
+		current->priority = new_priority;
+
     thread_preemption(); //실행중인 리스트의 우선도를 확인한다
 }
 
