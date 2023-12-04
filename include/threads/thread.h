@@ -103,6 +103,11 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	struct list_elem d_elem;   			/* List element for donate list */
 
+	/* MLFQS 요소 추가 */
+	int nice; // 정수
+	int recent_cpu; // 실수
+	// int load_avg; 실수이며 thread.c에 전역변수로 있음
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -149,6 +154,15 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* MLFQS */
+int thread_get_load_avg (void);
+int thread_get_recent_cpu (void);
+void mlfqs_priority (struct thread *t);
+void mlfqs_recent_cpu (struct thread *t);
+void mlfqs_load_avg (void);
+void mlfqs_increment (void);
+void mlfqs_recalc (void);
+
 void do_iret (struct intr_frame *tf);
 
 void thread_sleep(int64_t ticks);
@@ -158,3 +172,4 @@ bool donate_max_option(const struct list_elem *a, const struct list_elem *b, voi
 void thread_preemption(void);
 
 #endif /* threads/thread.h */
+

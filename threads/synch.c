@@ -67,9 +67,10 @@ sema_down (struct semaphore *sema) {
 	old_level = intr_disable ();
 	while (sema->value == 0) {
 		/* priority에 따라 semapore의 waiters리스트에 내림차순으로 삽입한다 
-		   - donate sema를 하기 위해서 sema를 sort하기에 insert_orderd를 할 필요가 없다 */
+		   - donate sema를 하기 위해서 sema를 sort하기에 insert_ordered를 할 필요가 없다 */
 		//list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_sort_option, (int *) 1);
 		list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_sort(&sema->waiters, thread_sort_option, (int *) 1);
 		thread_block ();
 	}
 	sema->value--;
@@ -195,37 +196,41 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-	if(lock->holder != NULL){		// 다른 어떤 쓰레드가 lock을 가지고 있는 상태
-		struct thread * lock_holder = lock->holder;
-		
-		list_push_back(&lock_holder->donate_list, &thread_current()->d_elem);	// lock_holder를 donate_list에 넣어줌
-		thread_current()->wait_on_lock = lock; // 쓰레드가 기다리는 lock을 명시해준다
-		
-		// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져와줌
-		struct list_elem * donor_elem = list_max(&lock_holder->donate_list, donate_max_option, NULL);
-		// priority donation이 발생하는 부분
-		lock_holder->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+	if (!thread_mlfqs){ // mlfqs 스케줄러 활성화 시 priority donation 관련 코드 비활성화
 
-		// donate_priority 선언하고, 이는 lock을 가지고 있는 쓰레드의 priority를 의미한다
-		int donated_priority = lock_holder->priority;
-		// lock을 가지고 있는 쓰레드가 또 다른 lock을 기다리고 있다면
-		while (lock_holder->wait_on_lock != NULL)
-		{
-			// lock을 가지고 있는 쓰레드가 기다리는 lock의 소유자로 lock_holder를 갱신한다
-			lock_holder = lock_holder->wait_on_lock->holder;
-			// lock을 가지고 있는 쓰레드의 priority가 donated_priority보다 작다면, priority 갱신
-			if(lock_holder->priority < donated_priority)
-				lock_holder->priority = donated_priority;
-			else
-				break;
+		if(lock->holder != NULL){		// 다른 어떤 쓰레드가 lock을 가지고 있는 상태
+			struct thread * lock_holder = lock->holder;
+			
+			list_push_back(&lock_holder->donate_list, &thread_current()->d_elem);	// lock_holder를 donate_list에 넣어줌
+			thread_current()->wait_on_lock = lock; // 쓰레드가 기다리는 lock을 명시해준다
+			
+			// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져와줌
+			struct list_elem * donor_elem = list_max(&lock_holder->donate_list, donate_max_option, NULL);
+			// priority donation이 발생하는 부분
+			lock_holder->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+
+			// donate_priority 선언하고, 이는 lock을 가지고 있는 쓰레드의 priority를 의미한다
+			int donated_priority = lock_holder->priority;
+			// lock을 가지고 있는 쓰레드가 또 다른 lock을 기다리고 있다면
+			while (lock_holder->wait_on_lock != NULL)
+			{
+				// lock을 가지고 있는 쓰레드가 기다리는 lock의 소유자로 lock_holder를 갱신한다
+				lock_holder = lock_holder->wait_on_lock->holder;
+				// lock을 가지고 있는 쓰레드의 priority가 donated_priority보다 작다면, priority 갱신
+				if(lock_holder->priority < donated_priority)
+					lock_holder->priority = donated_priority;
+				else
+					break;
+			}
 		}
 	}
-
 	//현재 쓰레드가 락을 획득할 수 있을 때까지 현재 lock의 semaphore의 waiter에 들어가고 block됨 
 	sema_down (&lock->semaphore);
 	// 현재 쓰레드가 락을 획득하고 wait on lock을 갱신함
 	lock->holder = thread_current();
-	thread_current()->wait_on_lock = NULL;
+
+	if (!thread_mlfqs) // mlfqs 스케줄러 활성화 시 priority donation 관련 코드 비활성화
+		thread_current()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -259,32 +264,34 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	// 현재 쓰레드의 donate_list가 비어있지 않음.
-	if(!list_empty(&thread_current()->donate_list)){
-		// donate_list의 첫 번째 d_elem을 받아옴.
-		struct list_elem * donor_elem = list_begin(&thread_current()->donate_list);
-
-		// donor_elem이 현재 쓰레드의 donate_list의 tail이 될 때까지
-		while (donor_elem != &thread_current()->donate_list.tail)
-		{
-			// donor_elem을 가진 쓰레드가 해당 lock을 기다리고 있을 때 donate_list에서 제거
-			if(list_entry(donor_elem, struct thread, d_elem)->wait_on_lock == lock)
-				donor_elem = list_remove(donor_elem);
-			else
-				donor_elem = donor_elem->next;
-		}
-
+	if (!thread_mlfqs){ // mlfqs 스케줄러 활성화 시 priority donation 관련 코드 비활성화
 		// 현재 쓰레드의 donate_list가 비어있지 않음.
-		if(!list_empty(&thread_current()->donate_list)){ 
-			// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져옴
-			donor_elem = list_max(&thread_current()->donate_list, donate_max_option, NULL);
-			// 현재 쓰레드의 priority를 donor_elem을 가지고 있는 쓰레드의 priority값으로 갱신해줌
-			thread_current()->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+		if(!list_empty(&thread_current()->donate_list)){
+			// donate_list의 첫 번째 d_elem을 받아옴.
+			struct list_elem * donor_elem = list_begin(&thread_current()->donate_list);
+
+			// donor_elem이 현재 쓰레드의 donate_list의 tail이 될 때까지
+			while (donor_elem != &thread_current()->donate_list.tail)
+			{
+				// donor_elem을 가진 쓰레드가 해당 lock을 기다리고 있을 때 donate_list에서 제거
+				if(list_entry(donor_elem, struct thread, d_elem)->wait_on_lock == lock)
+					donor_elem = list_remove(donor_elem);
+				else
+					donor_elem = donor_elem->next;
+			}
+
+			// 현재 쓰레드의 donate_list가 비어있지 않음.
+			if(!list_empty(&thread_current()->donate_list)){ 
+				// donate_list에서 priority가 가장 높은 쓰레드의 d_elem을 가져옴
+				donor_elem = list_max(&thread_current()->donate_list, donate_max_option, NULL);
+				// 현재 쓰레드의 priority를 donor_elem을 가지고 있는 쓰레드의 priority값으로 갱신해줌
+				thread_current()->priority = list_entry(donor_elem, struct thread, d_elem)->priority;
+			}
+			/* 현재쓰레드의 donate_list가 비어있다면 = 현재쓰레드가 보유중인 락을 요구하는 쓰레드 중
+				현재쓰레드의 우선순위가 가장 높다면 현재쓰레드의 priority가 original_priority로 돌아옴*/
+			else
+				thread_current()->priority = thread_current()->original_priority;
 		}
-		/* 현재쓰레드의 donate_list가 비어있다면 = 현재쓰레드가 보유중인 락을 요구하는 쓰레드 중
-		   현재쓰레드의 우선순위가 가장 높다면 현재쓰레드의 priority가 original_priority로 돌아옴*/
-		else
-			thread_current()->priority = thread_current()->original_priority;
 	}
 	// holder의 lock 소유권을 해제하고 Sema_up을 해줌
 	lock->holder = NULL;
@@ -363,8 +370,9 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	old_level = intr_disable ();
 	sema_init (&waiter.semaphore, 0);
 	/* semaphor의 첫 쓰레드의 우선도를 비교하여 semaphore_elem의 리스트에 내림차순으로 넣는다 */
-	list_insert_ordered(&cond->waiters, &waiter.elem, compare_priority, NULL);
-	//list_push_back (&cond->waiters, &waiter.elem);
+	// list_insert_ordered(&cond->waiters, &waiter.elem, compare_priority, NULL);
+	list_push_back (&cond->waiters, &waiter.elem);
+	list_sort(&cond->waiters, compare_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	intr_set_level(old_level);

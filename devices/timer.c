@@ -137,11 +137,37 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	/* MLFPQS */
+	if (thread_mlfqs){
+		struct thread *t = thread_current();
+
+		// 매 틱마다 recent_cpu 1 증가
+		mlfqs_increment();
+
+
+		// 1초마다 priority 계산
+		// 1초마다 load_avg 계산
+		// 1초마다 recent_cpu 계산
+		if (ticks % TIMER_FREQ == 0){
+			mlfqs_load_avg(); // load_avg 계산
+			mlfqs_recalc(); // priority, cpu 계산
+		}
+
+		// 4틱마다 priority 계산
+		if (ticks % 4 == 0){
+			mlfqs_priority (t);
+		}
+
+
+	}
+
 	/* global tick 을 확인하여 깨울 수 있는 쓰레드가 있는지 확인한다,
 	   깨어날 수 있는 쓰레드들을 ready list에 넣고
 	   global tick을 갱신한다*/
 	if (global_tick <= ticks)
 		global_tick = thread_wake(ticks);
+		
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
