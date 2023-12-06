@@ -158,6 +158,29 @@ error:
 	thread_exit ();
 }
 
+void
+argument_stack(char *argv[], int argc, struct intr_frame * if_){
+	void * address[argc];
+	for(int i = argc - 1; i >= 0; i --)
+	{
+		int len = strlen(argv[i])+1;
+		memcpy(if_->rsp, argv[i], len);
+		address[i] = (void *) if_->rsp;
+	}
+
+	if(if_->rsp % 8 != 0)
+		memset(if_->rsp, 0, if_->rsp % 8);
+
+	if_->rsp -= sizeof(address);
+	memset(if_->rsp, 0, sizeof(address));
+
+	if_->rsp -= argc * sizeof(address);
+	memcpy(if_->rsp, address, argc * sizeof(address));
+
+	if_->rsp -= sizeof(void *);
+	memcpy(if_->rsp,(void *) 0, sizeof(void *));
+}
+
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
 int
@@ -179,12 +202,28 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	/* Missing part! set up stack*/
+	char *token, *save_ptr;
+	char *argv[65];
+	int argc = 0;
+	for(token = strtok_r(file_name, " ", &save_ptr); token != NULL; 
+		token = strtok_r(NULL, " ", &save_ptr)){
+		argv[argc] = token;
+		argc ++;
+	}
+
+	argument_stack(argv, argc, &_if);
+		
+	hex_dump(_if.rsp, &_if.rsp, USER_STACK - _if.rsp, true);
+
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
+		//thread_exit () ;
 		return -1;
 
 	/* Start switched process. */
+	//asm volatile ("movl %0, %%esp; jump intr_exit" : : "g" (&_if) : "memory");
 	do_iret (&_if);
 	NOT_REACHED ();
 }
