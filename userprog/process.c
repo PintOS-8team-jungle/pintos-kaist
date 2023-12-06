@@ -160,25 +160,34 @@ error:
 
 void
 argument_stack(char *argv[], int argc, struct intr_frame * if_){
-	void * address[argc];
+	void *address[argc];
+
 	for(int i = argc - 1; i >= 0; i --)
 	{
 		int len = strlen(argv[i])+1;
+		if_->rsp -= len;
 		memcpy(if_->rsp, argv[i], len);
 		address[i] = (void *) if_->rsp;
 	}
 
-	if(if_->rsp % 8 != 0)
+	if(if_->rsp % 8 != 0){
+		if_->rsp -= if_->rsp % 8;
 		memset(if_->rsp, 0, if_->rsp % 8);
+	}
 
-	if_->rsp -= sizeof(address);
-	memset(if_->rsp, 0, sizeof(address));
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	for(int i = argc - 1; i >= 0; i --)
+	{
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &address[i], 8);
+	}
 
-	if_->rsp -= argc * sizeof(address);
-	memcpy(if_->rsp, address, argc * sizeof(address));
+	if_->R.rsi = if_->rsp;
+	if_->R.rdi = argc;
 
-	if_->rsp -= sizeof(void *);
-	memcpy(if_->rsp,(void *) 0, sizeof(void *));
+	if_->rsp -= 8;
+	memset(if_->rsp,0, 8);
 }
 
 /* Switch the current execution context to the f_name.
@@ -198,10 +207,6 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-
-	/* And then load the binary */
-	success = load (file_name, &_if);
-
 	/* Missing part! set up stack*/
 	char *token, *save_ptr;
 	char *argv[65];
@@ -212,9 +217,12 @@ process_exec (void *f_name) {
 		argc ++;
 	}
 
+	/* And then load the binary */
+	success = load (file_name, &_if);
+
 	argument_stack(argv, argc, &_if);
 		
-	hex_dump(_if.rsp, &_if.rsp, USER_STACK - _if.rsp, true);
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -243,6 +251,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	int cnt = 999999999;
+	while (cnt--);
+	
 	return -1;
 }
 
