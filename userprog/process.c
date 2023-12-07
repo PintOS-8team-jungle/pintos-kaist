@@ -27,6 +27,9 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+int parse_instruction(char *, char **);
+void stack_argument(struct intr_frame *, int, char **);
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -168,6 +171,7 @@ process_exec (void *f_name) {
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
+
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
@@ -176,8 +180,17 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	// 추가 1
+	char *argv[65]; 
+	int argc = parse_instruction (file_name, argv);
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
+
+	// 추가 2
+	stack_argument (&_if, argc, argv);
+
+	hex_dump (_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -189,6 +202,53 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
+int parse_instruction(char * file_name, char **argv){
+		char *token, *save_ptr;
+		int cnt = 0;
+
+	  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+			argv[cnt] = token;
+			cnt++;
+		}
+		return cnt;
+	}
+
+void stack_argument(struct intr_frame *_if, int argc, char **argv){
+		
+		void *address[argc];
+
+		// 문자열 스택에 넣기
+		for (int i = argc-1 ; i >= 0 ; i--){
+
+			int len = strlen(argv[i])+1;
+
+			_if->rsp = memcpy(_if->rsp - len, argv[i], len);
+			address[i] = (void *) _if->rsp;
+
+		}
+
+		// word-align. rsp 값이 8로 나눠지지 않으면 나머지 바이트들을 0으로 패딩
+		int padding = _if->rsp % 8;
+		if (padding != 0 ){
+			_if->rsp = memset(_if->rsp - padding, 0, padding);
+		}
+
+		// 0 패딩 (argv[4])
+		_if->rsp = memset(_if->rsp - 8, 0, 8);
+
+		// 주소 저장
+		for (int i = argc-1 ; i>=0 ; i--){
+			_if->rsp = memcpy(_if->rsp - 8, &address[i], 8);
+		}
+		
+		_if->R.rsi = _if->rsp;
+		_if->R.rdi = argc;
+
+		// Fake Address
+		_if->rsp = memset(_if->rsp - 8, 0, 8);
+
+
+}
 
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
@@ -201,6 +261,8 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	int cnt = 2000000000;
+	while (cnt--);
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
