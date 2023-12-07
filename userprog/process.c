@@ -207,20 +207,10 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-	/* Missing part! set up stack*/
-	char *token, *save_ptr;
-	char *argv[65];
-	int argc = 0;
-	for(token = strtok_r(file_name, " ", &save_ptr); token != NULL; 
-		token = strtok_r(NULL, " ", &save_ptr)){
-		argv[argc] = token;
-		argc ++;
-	}
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-	argument_stack(argv, argc, &_if);
 		
 	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
@@ -379,6 +369,16 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	/* parsing */
+	char *token, *save_ptr;
+	char *argv[65];
+	int argc = 0;
+	for(token = strtok_r(file_name, " ", &save_ptr); token != NULL; 
+		token = strtok_r(NULL, " ", &save_ptr)){
+		argv[argc] = token;
+		argc ++;
+	}
+	
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -466,6 +466,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	/* push arguments in stack */
+	argument_stack(argv, argc, if_);
 
 	success = true;
 
