@@ -211,7 +211,7 @@ int parse_instruction(char * file_name, char **argv){
 			cnt++;
 		}
 		return cnt;
-	}
+}
 
 void stack_argument(struct intr_frame *_if, int argc, char **argv){
 		
@@ -247,7 +247,6 @@ void stack_argument(struct intr_frame *_if, int argc, char **argv){
 		// Fake Address
 		_if->rsp = memset(_if->rsp - 8, 0, 8);
 
-
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -277,6 +276,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	printf("%s: exit(%d)\n", curr->name, curr->exit_status);
 
 	process_cleanup ();
 }

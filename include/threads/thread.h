@@ -108,6 +108,7 @@ struct thread {
 	int recent_cpu; // 실수
 	// int load_avg; 실수이며 thread.c에 전역변수로 있음
 
+	int exit_status;
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
