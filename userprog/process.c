@@ -40,7 +40,7 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
+	char *fn_copy, *save_ptr;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
@@ -49,6 +49,9 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
+
+	/* cut filename */
+	strtok_r(file_name," ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -177,6 +180,7 @@ argument_stack(char *argv[], int argc, struct intr_frame * if_){
 
 	if_->rsp -= 8;
 	memset(if_->rsp, 0, 8);
+	
 	for(int i = argc - 1; i >= 0; i --)
 	{
 		if_->rsp -= 8;
@@ -212,7 +216,7 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);
 
 		
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -255,7 +259,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	printf("%s: exit(%d)\n",curr->name, curr->exit_status);
 	process_cleanup ();
 }
 
@@ -477,6 +481,26 @@ done:
 	return success;
 }
 
+int
+process_add_file(struct file *f){
+	struct thread *t = thread_current();
+	int i = t->next_fd;
+	do{
+		if(t->fdt[i] == NULL) {
+			enum intr_level old_level = intr_disable();
+			t->fdt[i] = f;
+			t->next_fd = (i < 63)? i+1 : 3;
+			intr_set_level(old_level);
+			return 0;
+		}
+		if(i == 63 )
+			i = 3;
+		else
+			i ++;
+	}while(i != t->next_fd);
+	
+	return -1;
+}
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */

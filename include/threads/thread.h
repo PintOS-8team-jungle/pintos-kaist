@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -92,6 +93,10 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	
+	int exit_status;					/* value of exit systemcall */
+	int next_fd;						/* next space for insert in file discriptor */
+	struct file *fdt[64]; 			/* file discriptor */
+
 	bool donated;						/* check thread is donated */
 	int original_priority;				/* if donated, save original priority */
 	int64_t wake_time;					/* element require for sleep & wake*/

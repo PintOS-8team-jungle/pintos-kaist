@@ -209,6 +209,9 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	/* set file discriptor */
+	t->next_fd = 3;
+
 	/* Add to run queue. */
 	thread_unblock (t);
 

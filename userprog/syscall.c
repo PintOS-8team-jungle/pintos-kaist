@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -7,9 +8,73 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/filesys.h"
+
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+
+bool check_address(void * address){
+	struct thread * t = thread_current();
+	if(!pml4_get_page(t->pml4, address)){
+		t->exit_status = -1;
+		thread_exit();
+	}
+	return true;
+}
+
+/* Projects 2 and later. */
+void halt (void){
+	power_off();
+}
+
+void exit (int status){
+	thread_current()->exit_status = status;
+	thread_exit();
+}
+
+// pid_t fork (const char *thread_name);
+// int exec (const char *file);
+// int wait (pid_t);
+
+bool create (const char *file, unsigned int initial_size){
+	check_address(file);
+	if (strlen(file) <= 0 && strlen(file) > 15)
+		return 0;
+	
+	bool success = filesys_create(file,initial_size);
+	return success;
+}
+
+bool remove (const char *file){
+	bool success = filesys_remove(file);
+	return success;
+}
+
+int open (const char *file){
+	int fd = 0;
+	struct file * open_file = filesys_open(file);
+	if (file == NULL)
+		return -1;
+	lock_acquire(&filesys_lock);
+	fd = process_add_file(open_file);
+	lock_release(&filesys_lock);
+
+	return fd;
+}
+
+// int filesize (int fd);
+
+// int read (int fd, void *buffer, unsigned length);
+
+int write (int fd, const void *buffer, unsigned length){
+	printf("%s", buffer);
+	return 1;
+}
+
+// void seek (int fd, unsigned position);
+// unsigned tell (int fd);
+// void close (int fd);
 
 /* System call.
  *
@@ -30,6 +95,8 @@ syscall_init (void) {
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
 
+	lock_init(&filesys_lock);
+
 	/* The interrupt service rountine should not serve any interrupts
 	 * until the syscall_entry swaps the userland stack to the kernel
 	 * mode stack. Therefore, we masked the FLAG_FL. */
@@ -41,6 +108,52 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+	// printf("\n%s\n", f->R.rax);
+	switch (f->R.rax)
+	{
+		case SYS_HALT:                   /* Halt the operating system. */
+			halt();
+			break;
+		case SYS_EXIT:                   /* Terminate this process. */
+			exit(f->R.rdi);
+			break;
+		// case SYS_FORK:                   /* Clone current process. */
+		// 	fork(f->R.rdi);
+		// 	break;
+		// case SYS_EXEC:                   /* Switch current process. */
+		// 	exec(f->R.rdi);
+		// 	break;
+		// case SYS_WAIT:                   /* Wait for a child process to die. */
+		// 	wait(f->R.rdi);
+		// 	break;
+		case SYS_CREATE:                 /* Create a file. */
+			f->R.rax = create(f->R.rdi, f->R.rsi);
+			break;
+		case SYS_REMOVE:                 /* Delete a file. */
+			f->R.rax = remove(f->R.rdi);
+			break;
+		case SYS_OPEN:                   /* Open a file. */
+			f->R.rax = open(f->R.rdi);
+			break;
+		// case SYS_FILESIZE:               /* Obtain a file's size. */
+		// 	filesize(f->R.rdi);
+		// 	break;
+		// case SYS_READ:                   /* Read from a file. */
+		// 	read(f->R.rdi, f->R.rsi, f->R.rdx);
+		// 	break;
+		case SYS_WRITE:                  /* Write to a file. */
+			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
+		// case SYS_SEEK:                   /* Change position in a file. */
+		// 	seek(f->R.rdi, f->R.rsi);
+		// 	break;
+		// case SYS_TELL:                   /* Report current position in a file. */
+		// 	tell(f->R.rdi);
+		// 	break;
+		// case SYS_CLOSE:                  /* Close a file. */
+		// 	close(f->R.rdi);
+		// 	break;
+		default:
+			break;
+	}
 }
