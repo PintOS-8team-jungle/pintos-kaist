@@ -3,6 +3,7 @@
 
 #include "stdbool.h"
 #include <stddef.h>
+#include "threads/synch.h"
 
 /* Process identifier. */
 typedef int pid_t;
@@ -13,5 +14,7 @@ typedef int off_t;
 #define MAP_FAILED ((void *) NULL)
 
 void syscall_init (void);
+
+struct lock filesys_lock;
 
 #endif /* userprog/syscall.h */

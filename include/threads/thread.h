@@ -9,7 +9,6 @@
 #include "vm/vm.h"
 #endif
 
-
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
@@ -27,6 +26,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+#define FDT_SIZE 128
+#define FDT_MIN 3
 
 /* A kernel thread or user process.
  *
@@ -96,7 +98,7 @@ struct thread {
 	int original_priority;				/* if donated, save original priority */
 	int64_t wake_time;					/* element require for sleep & wake*/
 
-	struct lock * wait_on_lock;
+	struct lock *wait_on_lock;
 	struct list donate_list;
 
 	/* Shared between thread.c and synch.c. */
@@ -108,7 +110,11 @@ struct thread {
 	int recent_cpu; // 실수
 	// int load_avg; 실수이며 thread.c에 전역변수로 있음
 
+	/* USERPROG 요소 추가 */
 	int exit_status;
+	struct file *fdt[FDT_SIZE]; // file descriptor table
+	int next_fd;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */

@@ -8,6 +8,8 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 
 /* Projects 2 and later. */
@@ -45,6 +47,9 @@ int write2 (struct intr_frame *);
 
 void
 syscall_init (void) {
+
+	lock_init(&filesys_lock);
+
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
@@ -77,16 +82,19 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_WAIT:			/* Wait for a child process to die. */
 			break;
 		case SYS_CREATE:		/* Create a file. */
+			create(f->R.rdi, f->R.rsi);
 			break;                 
 		case SYS_REMOVE:		/* Delete a file. */
 			break;                 
 		case SYS_OPEN:			/* Open a file. */
+			open(f->R.rdi);
 			break;                   
 		case SYS_FILESIZE:	/* Obtain a file's size. */
 			break;             
 		case SYS_READ:			/* Read from a file. */
 			break;                   
 		case SYS_WRITE:			/* Write to a file. */
+			// printf("\nwrite test\n");
 			write2(f);
 			break;                  
 		case SYS_SEEK:			/* Change position in a file. */
@@ -140,15 +148,54 @@ void exit (int status){
 pid_t fork (const char *thread_name);
 int exec (const char *file);
 int wait (pid_t);
-bool create (const char *file, unsigned initial_size);
+
+bool create (const char *file, unsigned initial_size){
+
+	bool success = filesys_create(file, initial_size);
+	return success;
+
+}
+
 bool remove (const char *file);
-int open (const char *file);
+
+int open (const char *file){
+
+	struct file *f = filesys_open(file); // Returns the new file if successful or a null pointer otherwise.
+	if (f == NULL){
+		exit(-1);
+	}
+	// f->inode->open_cnt++;
+	// if (f->inode->removed) return -1;
+
+	/* First Fit. TODO: Next fit. */
+	int fd = FDT_MIN;
+	struct thread *t = thread_current();
+
+	while (t->fdt[fd++] != NULL && fd < FDT_SIZE){
+		// t->next_fd;
+	}
+
+	if(fd >= FDT_SIZE){
+		return -1;
+	}
+
+	t->fdt [fd] = f;
+	return fd;
+	// t->next_fd = fd;
+}
+
 int filesize (int fd);
 int read (int fd, void *buffer, unsigned length);
 // int write (int fd, const void *buffer, unsigned length)
 int write2 (struct intr_frame *f){
-	printf("%s", f->R.rsi);
-	return 0;
+
+	int fd = f->R.rdi;
+	void *buffer = f->R.rsi;
+	unsigned length = f->R.rdx;
+
+	printf("%s", buffer);
+	return length;
+	// %rdi, %rsi, %rdx, %r10, %r8, %r9
 }
 void seek (int fd, unsigned position);
 unsigned tell (int fd);

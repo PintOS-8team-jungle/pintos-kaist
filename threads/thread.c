@@ -136,6 +136,9 @@ thread_init (void) {
 	/* MLFQS */
 	initial_thread->recent_cpu = 0; // init 스레드의 초기 값은 '0'
 
+	/* UESRPROG 요소 추가 */
+	// struct file *fdt[128] NULL init ? for문
+	initial_thread->next_fd = FDT_MIN;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -383,6 +386,8 @@ thread_exit (void) {
 
 #ifdef USERPROG
 	process_exit ();
+	/* 모든 파일을 닫고,
+	   파일 디스크립터 테이블을 deallocate ?? */
 #endif
 
 	/* Just set our status to dying and schedule another process.
