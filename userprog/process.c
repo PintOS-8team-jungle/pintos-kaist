@@ -491,7 +491,7 @@ process_add_file(struct file *f){
 			t->fdt[i] = f;
 			t->next_fd = (i < 63)? i+1 : 3;
 			intr_set_level(old_level);
-			return 0;
+			return i;
 		}
 		if(i == 63 )
 			i = 3;

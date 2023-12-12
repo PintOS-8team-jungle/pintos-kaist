@@ -210,6 +210,9 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	/* set file discriptor */
+	t->fdt[0] = 0;
+	t->fdt[1] = 1;
+	t->fdt[2] = 2;
 	t->next_fd = 3;
 
 	/* Add to run queue. */

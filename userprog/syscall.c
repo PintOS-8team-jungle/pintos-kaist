@@ -8,6 +8,8 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/inode.h"
+#include "filesys/file.h"
 #include "filesys/filesys.h"
 
 
@@ -52,9 +54,10 @@ bool remove (const char *file){
 }
 
 int open (const char *file){
+	check_address(file);
 	int fd = 0;
 	struct file * open_file = filesys_open(file);
-	if (file == NULL)
+	if (open_file == NULL)
 		return -1;
 	lock_acquire(&filesys_lock);
 	fd = process_add_file(open_file);
@@ -63,13 +66,34 @@ int open (const char *file){
 	return fd;
 }
 
-// int filesize (int fd);
+int filesize (int fd){
+	struct file *f = thread_current()->fdt[fd];
+	return file_length(f);
+}
 
-// int read (int fd, void *buffer, unsigned length);
+int read (int fd, void *buffer, unsigned length){
+	check_address(buffer);
+	if(fd < 3 || fd > 63) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+	struct file *f = thread_current()->fdt[fd];
+	return file_read(f, buffer, length);
+}
 
 int write (int fd, const void *buffer, unsigned length){
-	printf("%s", buffer);
-	return 1;
+	if(fd == 1){
+		printf("%s", buffer);
+		return 1;
+	}
+	check_address(buffer);
+	if(fd < 3 || fd > 63) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+	struct file *f = thread_current()->fdt[fd];
+	off_t i = file_write(f, buffer, length);
+	return i;
 }
 
 // void seek (int fd, unsigned position);
@@ -135,12 +159,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_OPEN:                   /* Open a file. */
 			f->R.rax = open(f->R.rdi);
 			break;
-		// case SYS_FILESIZE:               /* Obtain a file's size. */
-		// 	filesize(f->R.rdi);
-		// 	break;
-		// case SYS_READ:                   /* Read from a file. */
-		// 	read(f->R.rdi, f->R.rsi, f->R.rdx);
-		// 	break;
+		case SYS_FILESIZE:               /* Obtain a file's size. */
+			f->R.rax = filesize(f->R.rdi);
+			break;
+		case SYS_READ:                   /* Read from a file. */
+			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
 		case SYS_WRITE:                  /* Write to a file. */
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
