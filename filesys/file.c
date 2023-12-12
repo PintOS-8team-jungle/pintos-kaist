@@ -64,6 +64,12 @@ file_get_inode (struct file *file) {
 	return file->inode;
 }
 
+/* Return the deny_write status of file */
+off_t
+file_get_deny_write (struct file *file) {
+	return file->deny_write;
+}
+
 /* Reads SIZE bytes from FILE into BUFFER,
  * starting at the file's current position.
  * Returns the number of bytes actually read,

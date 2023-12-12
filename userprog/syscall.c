@@ -96,9 +96,31 @@ int write (int fd, const void *buffer, unsigned length){
 	return i;
 }
 
-// void seek (int fd, unsigned position);
-// unsigned tell (int fd);
-// void close (int fd);
+void seek (int fd, unsigned position){
+	if(fd < 3 || fd > 63) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+	file_seek(thread_current()->fdt[fd],position);
+}
+
+unsigned tell (int fd){
+	if(fd < 3 || fd > 63) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+	return file_tell(thread_current()->fdt[fd]);
+}
+
+void close (int fd) {
+	if(fd < 3 || fd > 63) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+	struct file *f = thread_current()->fdt[fd];
+	if(f != NULL && file_get_deny_write(f) == 0)
+		file_close(f);
+}
 
 /* System call.
  *
@@ -171,12 +193,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// case SYS_SEEK:                   /* Change position in a file. */
 		// 	seek(f->R.rdi, f->R.rsi);
 		// 	break;
-		// case SYS_TELL:                   /* Report current position in a file. */
-		// 	tell(f->R.rdi);
-		// 	break;
-		// case SYS_CLOSE:                  /* Close a file. */
-		// 	close(f->R.rdi);
-		// 	break;
+		case SYS_TELL:                   /* Report current position in a file. */
+			f->R.rax = tell(f->R.rdi);
+			break;
+		case SYS_CLOSE:                  /* Close a file. */
+			close(f->R.rdi);
+			break;
 		default:
 			break;
 	}
