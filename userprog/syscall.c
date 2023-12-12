@@ -9,8 +9,26 @@
 #include "intrinsic.h"
 
 
+
+/* Projects 2 and later. */
+void halt (void);
+void exit (int status);
+pid_t fork (const char *thread_name);
+int exec (const char *file);
+int wait (pid_t);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file);
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned length);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+
+int write2 (struct intr_frame *);
 
 /* System call.
  *
@@ -42,7 +60,6 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
-
 	int syscall_number = f->R.rax;
 	// printf("\nsyscall_number : %d\n", f->R.rax);
 	switch (syscall_number){
@@ -70,6 +87,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_READ:			/* Read from a file. */
 			break;                   
 		case SYS_WRITE:			/* Write to a file. */
+			write2(f);
 			break;                  
 		case SYS_SEEK:			/* Change position in a file. */
 			break;                   
@@ -104,6 +122,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	// 시스템 콜 번호를 받아오고
 	// 어떤 시스템 콜 인자들을 받아오고
 	// 그에 알맞은 액션을 취해야 한다.
+
+	// thread_exit();
+	
 }
 
 
@@ -124,7 +145,11 @@ bool remove (const char *file);
 int open (const char *file);
 int filesize (int fd);
 int read (int fd, void *buffer, unsigned length);
-int write (int fd, const void *buffer, unsigned length);
+// int write (int fd, const void *buffer, unsigned length)
+int write2 (struct intr_frame *f){
+	printf("%s", f->R.rsi);
+	return 0;
+}
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);

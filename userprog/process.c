@@ -165,6 +165,7 @@ error:
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
+
 	char *file_name = f_name;
 	bool success;
 
@@ -190,7 +191,7 @@ process_exec (void *f_name) {
 	// 추가 2
 	stack_argument (&_if, argc, argv);
 
-	hex_dump (_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
+	// hex_dump (_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -200,6 +201,7 @@ process_exec (void *f_name) {
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
+
 }
 
 int parse_instruction(char * file_name, char **argv){
