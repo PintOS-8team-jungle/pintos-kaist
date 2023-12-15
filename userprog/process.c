@@ -182,9 +182,14 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	// 추가 1
+	printf("*****file name 1: %s\n",file_name);
 	char *argv[65]; 
 	int argc = parse_instruction (file_name, argv);
-
+	printf("*****argv[0]: %s\n", argv[0]);
+	printf("*****argv[1]: %s\n", argv[1]);
+	printf("*****file name 2: %s\n",file_name);
+	printf("file name is under kern_base?: %d\n",file_name<KERN_BASE);
+	printf("file name address: %p\n",file_name);
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -226,7 +231,7 @@ void stack_argument(struct intr_frame *_if, int argc, char **argv){
 
 			_if->rsp = memcpy(_if->rsp - len, argv[i], len);
 			address[i] = (void *) _if->rsp;
-
+			printf("*****stack argument[%d]: %s", i, argv[i]);
 		}
 
 		// word-align. rsp 값이 8로 나눠지지 않으면 나머지 바이트들을 0으로 패딩

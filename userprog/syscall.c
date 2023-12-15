@@ -27,9 +27,12 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
+void check_address(const uint64_t *addr);
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+int write (int fd, const void *buffer, unsigned length);
 int write2 (struct intr_frame *);
 
 /* System call.
@@ -85,26 +88,34 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			create(f->R.rdi, f->R.rsi);
 			break;                 
 		case SYS_REMOVE:		/* Delete a file. */
+			remove(f->R.rdi);
 			break;                 
 		case SYS_OPEN:			/* Open a file. */
 			open(f->R.rdi);
 			break;                   
 		case SYS_FILESIZE:	/* Obtain a file's size. */
+			filesize(f->R.rdi);
 			break;             
 		case SYS_READ:			/* Read from a file. */
+			read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;                   
 		case SYS_WRITE:			/* Write to a file. */
 			// printf("\nwrite test\n");
-			write2(f);
+			// write2(f);
+			write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;                  
 		case SYS_SEEK:			/* Change position in a file. */
+			seek(f->R.rdi, f->R.rsi);
 			break;                   
 		case SYS_TELL:			/* Report current position in a file. */
+			tell(f->R.rdi);
 			break;
 		case SYS_CLOSE:			/* Close a file. */
+			close(f->R.rdi);
 			break;
 		default:
 			break;
+		// %rdi, %rsi, %rdx, %r10, %r8, %r9
 	}
 	// char * argv_addr = f->R.rsi;
 	// printf("%%rdi | argc : %d\n", f->R.rdi);
@@ -145,9 +156,11 @@ void exit (int status){
 	thread_exit();
 }
 
-pid_t fork (const char *thread_name);
-int exec (const char *file);
-int wait (pid_t);
+pid_t fork (const char *thread_name){}
+int exec (const char *file){}
+// int wait (pid_t){
+
+// }
 
 bool create (const char *file, unsigned initial_size){
 
@@ -156,18 +169,21 @@ bool create (const char *file, unsigned initial_size){
 
 }
 
-bool remove (const char *file);
+bool remove (const char *file){
+	bool success = filesys_remove(file);
+	return success;
+}
 
 int open (const char *file){
-
 	struct file *f = filesys_open(file); // Returns the new file if successful or a null pointer otherwise.
 	if (f == NULL){
 		exit(-1);
 	}
 	// f->inode->open_cnt++;
 	// if (f->inode->removed) return -1;
+	// ** 유저 주소에 있는지 확인하기
 
-	/* First Fit. TODO: Next fit. */
+	/* 파일 디스크립터 테이블에 파일 넣기. First Fit. TODO: Next fit. */
 	int fd = FDT_MIN;
 	struct thread *t = thread_current();
 
@@ -184,9 +200,55 @@ int open (const char *file){
 	// t->next_fd = fd;
 }
 
-int filesize (int fd);
-int read (int fd, void *buffer, unsigned length);
-// int write (int fd, const void *buffer, unsigned length)
+int filesize (int fd){
+
+	struct file *f = thread_current()->fdt[fd];
+
+	if (f == NULL){
+		exit(-1);
+	}
+
+	return file_length(f);
+
+}
+
+int read (int fd, void *buffer, unsigned length){
+	if (fd == 0){
+		// input_getc() 사용하기
+		printf("input_getc : %s\n", input_getc());
+	}
+
+	struct file *f = thread_current()->fdt[fd]; // fd_to_file 함수 만들기
+
+	if (f == NULL){
+		return -1;
+	}
+
+	int size = file_read(f, buffer, length);
+	return size;
+}
+
+int write (int fd, const void *buffer, unsigned length){
+	// printf("*****fd:%d\n", fd);
+	if(fd == 1){
+		// putbuf(buffer, length);
+		// printf("\n*****buffer: %s\n", buffer);
+		printf("%s", buffer);
+		return 1;
+	}
+
+	if(fd<3 || fd>63){
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+
+	struct file *f = thread_current()->fdt[fd];
+	// putbuf 쓰기 ?
+	int written_bytes = file_write(f, buffer, length);
+
+	return written_bytes;
+}
+
 int write2 (struct intr_frame *f){
 
 	int fd = f->R.rdi;
@@ -197,6 +259,30 @@ int write2 (struct intr_frame *f){
 	return length;
 	// %rdi, %rsi, %rdx, %r10, %r8, %r9
 }
-void seek (int fd, unsigned position);
-unsigned tell (int fd);
-void close (int fd);
+
+void seek (int fd, unsigned position){
+	struct file *f = thread_current()->fdt[fd];
+	file_seek(f, position);
+}
+unsigned tell (int fd){
+	struct file *f = thread_current()->fdt[fd];
+	int pos = file_tell(f);
+	return pos;
+}
+
+void close (int fd){
+
+	if (fd < FDT_MIN || fd > FDT_SIZE){
+		exit(-1);
+	}
+
+	thread_current()->fdt[fd] = NULL;
+}
+
+void check_address(const uint64_t *addr)	
+{
+	struct thread *cur = thread_current();
+	if (!(is_user_vaddr(addr)) || pml4_get_page(cur->pml4, addr) == NULL) {
+		exit(-1);
+	}
+}

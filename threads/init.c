@@ -75,8 +75,13 @@ main (void) {
 
 	/* Break command line into arguments and parse options. */
 	argv = read_command_line ();
+	for(int i = 0 ; argv[i] != NULL ; i++){
+		printf("*****read_command_line argv[%d]: %s\n",i,argv[i]);
+	}
 	argv = parse_options (argv);
-
+	for(int i = 0 ; argv[i] != NULL ; i++){
+		printf("*****after parse***** read_command_line argv[%d]: %s\n",i,argv[i]);
+	}
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
 	thread_init ();
@@ -238,6 +243,11 @@ parse_options (char **argv) {
 static void
 run_task (char **argv) {
 	const char *task = argv[1];
+
+	printf("run_task에서 task 관련...\n");
+	printf("argv[0]: %s\n",argv[0]);
+	printf("argv[1]: %s\n",argv[1]);
+	printf("argv[2]: %s\n",argv[2]);
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
